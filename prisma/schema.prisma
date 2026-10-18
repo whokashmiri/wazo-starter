@@ -1,0 +1,180 @@
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// ENUMS
+// ==========================================
+
+enum PlatformRole {
+  USER
+  PLATFORM_ADMIN
+}
+
+enum OrganizationRole {
+  COMPANY_ADMIN
+  SUPERVISOR
+  AGENT
+}
+
+enum OrganizationStatus {
+  PENDING
+  PROVISIONING
+  ACTIVE
+  SUSPENDED
+  REJECTED
+  FAILED_PROVISIONING
+}
+
+// ==========================================
+// USERS
+// ==========================================
+
+model User {
+  id           String       @id @default(uuid())
+  email        String       @unique
+  name         String
+  passwordHash String
+  platformRole PlatformRole @default(USER)
+  isActive     Boolean      @default(true)
+
+  emailVerifiedAt DateTime?
+
+  memberships     Membership[]
+  sessions        Session[]
+  invitationsSent Invitation[] @relation("InvitationSender")
+
+  organizationsRequested Organization[] @relation("OrganizationRequester")
+  organizationsReviewed  Organization[] @relation("OrganizationReviewer")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ==========================================
+// ORGANIZATIONS
+// ==========================================
+
+model Organization {
+  id   String @id @default(uuid())
+  name String
+
+  // Populated after Wazo provisioning
+  wazoTenantUuid String? @unique
+
+  status OrganizationStatus @default(PENDING)
+
+  email   String?
+  phone   String?
+  country String @default("SA")
+
+  // Registration requester
+  requestedById String?
+  requestedBy   User? @relation("OrganizationRequester", fields: [requestedById], references: [id], onDelete: SetNull)
+
+  // Platform administrator reviewer
+  reviewedById String?
+  reviewedBy   User? @relation("OrganizationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  reviewedAt      DateTime?
+  rejectionReason String?
+
+  // Telephony provisioning
+  provisioningStartedAt DateTime?
+  provisionedAt         DateTime?
+  provisioningError     String?
+
+  memberships Membership[]
+  invitations Invitation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([requestedById])
+  @@index([createdAt])
+}
+
+// ==========================================
+// MEMBERSHIPS
+// ==========================================
+
+model Membership {
+  id             String @id @default(uuid())
+  userId         String
+  organizationId String
+
+  role OrganizationRole @default(AGENT)
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+  @@index([role])
+}
+
+// ==========================================
+// AUTHENTICATION SESSIONS
+// ==========================================
+
+model Session {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ==========================================
+// INVITATIONS
+// ==========================================
+
+model Invitation {
+  id             String @id @default(uuid())
+  email          String
+  tokenHash      String @unique
+  organizationId String
+  invitedById    String
+  role           OrganizationRole
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy    User         @relation("InvitationSender", fields: [invitedById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([email])
+}
+
+
+
+model IvrAudio {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantUuid   String   @db.Uuid
+  name         String
+  originalName String
+  menuSound    String
+  createdAt    DateTime @default(now())
+
+  @@index([tenantUuid, createdAt])
+}
+
