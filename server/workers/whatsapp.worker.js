@@ -1,4 +1,4 @@
-const { processInbound } = require('../service/whatsapp/whatsapp-routing.service');
+const { processInbound } = require('../service/whatsapp-routing.service');
 function startWhatsAppWorker(prisma, { intervalMs = 3000 } = {}) {
   let running = false;
   let stopped = false;
